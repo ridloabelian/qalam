@@ -446,11 +446,11 @@
   <div class="modal">
     <div class="modal-title">Masukkan API Key</div>
     <div class="modal-desc">
-      Disimpan di browser kamu saja — tidak dikirim ke mana pun selain Groq.<br><br>
-      Dapatkan key gratis di <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a>
+      Disimpan di browser kamu saja — tidak dikirim ke mana pun selain Anthropic.<br><br>
+      Dapatkan key di <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>
     </div>
-    <label>Groq API Key</label>
-    <input type="password" id="api-key-input" placeholder="gsk_..." autocomplete="off">
+    <label>Anthropic API Key</label>
+    <input type="password" id="api-key-input" placeholder="sk-ant-api03-..." autocomplete="off">
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal()">Batal</button>
       <button class="btn-save" onclick="saveKey()">Simpan</button>
@@ -565,7 +565,7 @@ ATURAN KERAS
 - Output harus langsung bisa digunakan tanpa editing`;
 
 // State
-let apiKey = localStorage.getItem('qalam_groq_key') || '';
+let apiKey = localStorage.getItem('qalam_api_key') || '';
 let isLoading = false;
 let fullOutput = '';
 
@@ -582,7 +582,7 @@ function updateKeyStatus() {
   const label = document.getElementById('key-label');
   if (apiKey) {
     dot.classList.add('active');
-    label.textContent = 'gsk-···' + apiKey.slice(-4);
+    label.textContent = 'sk-ant-···' + apiKey.slice(-4);
   } else {
     dot.classList.remove('active');
     label.textContent = 'set api key';
@@ -603,7 +603,7 @@ function saveKey() {
   const val = document.getElementById('api-key-input').value.trim();
   if (val) {
     apiKey = val;
-    localStorage.setItem('qalam_groq_key', val);
+    localStorage.setItem('qalam_api_key', val);
     updateKeyStatus();
   }
   closeModal();
@@ -663,20 +663,20 @@ async function forge() {
   notesSection.classList.remove('visible');
 
   try {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + apiKey
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'claude-sonnet-4-20250514',
         max_tokens: 1500,
+        system: SYSTEM_PROMPT,
         stream: true,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: raw }
-        ]
+        messages: [{ role: 'user', content: raw }]
       })
     });
 
@@ -699,12 +699,11 @@ async function forge() {
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue;
         const data = line.slice(6).trim();
-        if (data === '[DONE]') break;
+        if (data === '[DONE]') continue;
         try {
           const parsed = JSON.parse(data);
-          const delta = parsed.choices?.[0]?.delta?.content;
-          if (delta) {
-            fullOutput += delta;
+          if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
+            fullOutput += parsed.delta.text;
             renderOutput(fullOutput);
           }
         } catch {}
