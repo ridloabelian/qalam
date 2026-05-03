@@ -38,16 +38,26 @@ ATURAN KERAS
 let apiKey = localStorage.getItem('qalam_groq_key') || '';
 let isLoading = false;
 let fullOutput = '';
+const HISTORY_KEY = 'qalam_history';
+const HISTORY_MAX = 20;
 
 // Init
 updateKeyStatus();
 restoreDraft();
+renderHistory();
 
 // Stats counter + auto-save
 document.getElementById('raw-input').addEventListener('input', function() {
 updateStats(this.value);
 localStorage.setItem('qalam_draft', this.value);
+showDraftSavedToast();
 });
+
+let draftSaveTimeout;
+function showDraftSavedToast() {
+  clearTimeout(draftSaveTimeout);
+  draftSaveTimeout = setTimeout(() => showToast('Draft saved'), 800);
+}
 
 function updateStats(text) {
 const words = text.trim() ? text.trim().split(/\s+/).length : 0;
@@ -69,6 +79,7 @@ localStorage.removeItem('qalam_draft');
 updateStats('');
 fullOutput = '';
 document.getElementById('output-inner').style.display = 'none';
+document.getElementById('output-skeleton').style.display = 'none';
 document.getElementById('placeholder').style.display = 'flex';
 document.getElementById('output-box').classList.remove('has-content');
 document.getElementById('notes-section').classList.remove('visible');
@@ -140,6 +151,7 @@ navigator.clipboard.writeText(fullOutput).then(() => {
   btn.textContent = 'copied!';
   btn.classList.add('ok');
   setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('ok'); }, 1500);
+  showToast('Copied!');
 });
 }
 
@@ -159,12 +171,13 @@ btn.disabled = true;
 
 const placeholder = document.getElementById('placeholder');
 const outputInner = document.getElementById('output-inner');
+const outputSkeleton = document.getElementById('output-skeleton');
 const outputBox = document.getElementById('output-box');
 const notesSection = document.getElementById('notes-section');
 
 placeholder.style.display = 'none';
-outputInner.style.display = 'block';
-outputInner.innerHTML = '<span class="cursor"></span>';
+outputInner.style.display = 'none';
+outputSkeleton.style.display = 'flex';
 outputBox.classList.remove('has-content');
 notesSection.classList.remove('visible');
 
@@ -210,6 +223,11 @@ try {
         const parsed = JSON.parse(data);
         const delta = parsed.choices?.[0]?.delta?.content;
         if (delta) {
+          if (outputSkeleton.style.display !== 'none') {
+            outputSkeleton.style.display = 'none';
+            outputInner.style.display = 'block';
+            outputInner.innerHTML = '<span class="cursor"></span>';
+          }
           fullOutput += delta;
           renderOutput(fullOutput);
         }
@@ -222,8 +240,12 @@ try {
   outputBox.classList.add('has-content');
   parseAndShowNotes(fullOutput);
 
+  // Save successful forge to history
+  saveToHistory(raw, fullOutput);
+
 } catch (err) {
   outputInner.style.display = 'none';
+  outputSkeleton.style.display = 'none';
   placeholder.style.display = 'flex';
   showError('Error: ' + err.message);
 } finally {
@@ -257,4 +279,129 @@ if (match) {
 // Keyboard shortcut
 document.addEventListener('keydown', function(e) {
 if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') forge();
+if (e.key === 'Escape' && document.getElementById('history-drawer').classList.contains('open')) {
+  toggleHistory();
+}
 });
+
+/* ─────────── History ─────────── */
+
+function loadHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+  } catch { return []; }
+}
+
+function saveHistoryList(list) {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+}
+
+function saveToHistory(raw, refined) {
+  const list = loadHistory();
+  const item = {
+    id: Date.now(),
+    raw: raw,
+    refined: refined,
+    date: new Date().toISOString()
+  };
+  list.unshift(item);
+  if (list.length > HISTORY_MAX) list.length = HISTORY_MAX;
+  saveHistoryList(list);
+  renderHistory();
+}
+
+function deleteHistoryItem(id) {
+  const list = loadHistory().filter(item => item.id !== id);
+  saveHistoryList(list);
+  renderHistory();
+}
+
+function deleteAllHistory() {
+  if (!confirm('Hapus seluruh riwayat prompt? Tindakan ini tidak bisa dibatalkan.')) return;
+  localStorage.removeItem(HISTORY_KEY);
+  renderHistory();
+  showToast('History cleared');
+}
+
+function loadHistoryItem(id) {
+  const item = loadHistory().find(h => h.id === id);
+  if (!item) return;
+  document.getElementById('raw-input').value = item.raw;
+  updateStats(item.raw);
+  localStorage.setItem('qalam_draft', item.raw);
+  fullOutput = item.refined;
+  renderOutput(fullOutput, true);
+  document.getElementById('placeholder').style.display = 'none';
+  document.getElementById('output-skeleton').style.display = 'none';
+  document.getElementById('output-inner').style.display = 'block';
+  document.getElementById('output-box').classList.add('has-content');
+  parseAndShowNotes(fullOutput);
+  toggleHistory();
+}
+
+function toggleHistory() {
+  const drawer = document.getElementById('history-drawer');
+  const backdrop = document.getElementById('history-backdrop');
+  const isOpen = drawer.classList.contains('open');
+  if (isOpen) {
+    drawer.classList.remove('open');
+    backdrop.classList.remove('open');
+  } else {
+    drawer.classList.add('open');
+    backdrop.classList.add('open');
+  }
+}
+
+function formatHistoryDate(isoString) {
+  const d = new Date(isoString);
+  const pad = n => String(n).padStart(2, '0');
+  return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
+function renderHistory() {
+  const listEl = document.getElementById('history-list');
+  const list = loadHistory();
+  if (!list.length) {
+    listEl.innerHTML = '<div class="history-empty">Belum ada riwayat</div>';
+    document.getElementById('btn-delete-all').style.display = 'none';
+    return;
+  }
+  document.getElementById('btn-delete-all').style.display = 'block';
+  listEl.innerHTML = list.map(item => {
+    const preview = item.raw.replace(/\s+/g, ' ').trim().slice(0, 40) + (item.raw.length > 40 ? '…' : '');
+    const dateStr = formatHistoryDate(item.date);
+    return (
+      '<div class="history-item" onclick="loadHistoryItem(' + item.id + ')">' +
+        '<div class="history-meta">' +
+          '<span class="history-date">' + dateStr + '</span>' +
+          '<button class="history-delete" onclick="event.stopPropagation(); deleteHistoryItem(' + item.id + ')" title="Hapus">✕</button>' +
+        '</div>' +
+        '<div class="history-preview">' + escapeHtml(preview) + '</div>' +
+      '</div>'
+    );
+  }).join('');
+}
+
+function escapeHtml(text) {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/* ─────────── Toast ─────────── */
+
+function showToast(message) {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  // Trigger reflow for animation
+  void toast.offsetWidth;
+  toast.classList.add('show');
+
+  setTimeout(() => {
+    toast.classList.remove('show');
+    toast.classList.add('hide');
+    toast.addEventListener('transitionend', () => toast.remove());
+  }, 2000);
+}

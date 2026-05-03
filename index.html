@@ -46,6 +46,7 @@
       </div>
     </div>
     <div class="header-right">
+      <button class="history-toggle" id="history-toggle" onclick="toggleHistory()" title="Riwayat Prompt">⏳</button>
       <div class="key-status" onclick="openModal()" title="Klik untuk ubah API key">
         <div class="key-dot" id="key-dot"></div>
         <span id="key-label">set api key</span>
@@ -73,6 +74,11 @@ bikin caption ig tentang wakaf yang viral buat anak muda" spellcheck="false"></t
             <div class="output-placeholder-icon">قَلَم</div>
             <div class="output-placeholder-text">output akan muncul di sini</div>
           </div>
+          <div class="output-skeleton" id="output-skeleton" style="display:none">
+            <div class="skeleton-line" style="width:100%"></div>
+            <div class="skeleton-line" style="width:85%"></div>
+            <div class="skeleton-line" style="width:60%"></div>
+          </div>
           <div class="output-inner" id="output-inner" style="display:none"></div>
         </div>
       </div>
@@ -91,6 +97,19 @@ bikin caption ig tentang wakaf yang viral buat anak muda" spellcheck="false"></t
 
     <div class="error-msg" id="error-msg"></div>
 
+    <!-- History Panel -->
+    <div class="history-drawer" id="history-drawer">
+      <div class="history-header">
+        <div class="history-title">⏳ Riwayat Prompt</div>
+        <button class="history-close" onclick="toggleHistory()">✕</button>
+      </div>
+      <div class="history-list" id="history-list"></div>
+      <div class="history-footer">
+        <button class="btn-delete-all" id="btn-delete-all" onclick="deleteAllHistory()">Delete All History</button>
+      </div>
+    </div>
+    <div class="history-backdrop" id="history-backdrop" onclick="toggleHistory()"></div>
+
     <div class="notes-section" id="notes-section">
       <div class="notes-label">Catatan Singkat</div>
       <div class="notes-content" id="notes-content"></div>
@@ -104,6 +123,9 @@ bikin caption ig tentang wakaf yang viral buat anak muda" spellcheck="false"></t
     <div class="footer-right">قَلَم</div>
   </footer>
 </div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
 
 <script src="js/app.js"></script>
 </body>
