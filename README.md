@@ -33,3 +33,4 @@ qalam does not add magic — it surfaces what you already know.
 
 ---
 Built by [Ridlo Abelian](https://ridlo.id) · Waqf × AI × Indonesia
+<!-- verified -->
